@@ -662,6 +662,19 @@
 
   <div class="section-label">Data</div>
   <div class="settings-group">
+    <div class="settings-row" onclick="exportData()">
+      <div class="settings-icon" style="background:#E8F5E9">📤</div>
+      <div class="settings-label">Export Data</div>
+      <div class="settings-value">JSON</div>
+      <div class="settings-arrow">›</div>
+    </div>
+    <div class="settings-row" onclick="document.getElementById('import-file').click()">
+      <div class="settings-icon" style="background:#E3F2FD">📥</div>
+      <div class="settings-label">Import Data</div>
+      <div class="settings-value">JSON</div>
+      <div class="settings-arrow">›</div>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
     <div class="settings-row" onclick="confirmDeleteAll()">
       <div class="settings-icon" style="background:#FFEBEE">🗑️</div>
       <div class="settings-label" style="color:var(--danger)">Delete All Data</div>
@@ -750,8 +763,8 @@
 
 <script>
 // ── Supabase ──
-const SUPA_URL = 'https://yszpgqrjrwbsqpvfsrjx.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzenBncXJqcndia3NxcHZmc3JqeCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzQ3NTc1NzQ4LCJleHAiOjIwNjMxNTE3NDh9.S8j_U-1YJWB9D5jhpQ_G3kxhXp644tW8ljZGkJk_b1bAbpVbj4Skn58vqNKNxo';
+const SUPA_URL = 'https://zerkmwwtwfpzxlojbvew.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inplcmttd3d0d2Zwenhsb2pidmV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MTAzMTUsImV4cCI6MjA5NzE4NjMxNX0.As9JCfOO-uhM2PsNbViVe7ibYoW6gmgN3McMs-5l6Wo';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 let currentUser = null;
 
@@ -1436,6 +1449,46 @@ async function installApp() {
   deferredInstallPrompt = null;
   const row = document.getElementById('install-row');
   if (row) row.style.display = 'none';
+}
+function exportData() {
+  const data = {
+    exported: new Date().toISOString(),
+    bpReadings: state.bpReadings,
+    sugarReadings: state.sugarReadings
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bpsugar-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ Data exported!');
+}
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.bpReadings && !data.sugarReadings) throw new Error('Invalid format');
+      const existing = state;
+      const bpIds = new Set(existing.bpReadings.map(r => r.id));
+      const sgIds = new Set(existing.sugarReadings.map(r => r.id));
+      if (data.bpReadings) state.bpReadings = [...existing.bpReadings, ...data.bpReadings.filter(r => !bpIds.has(r.id))];
+      if (data.sugarReadings) state.sugarReadings = [...existing.sugarReadings, ...data.sugarReadings.filter(r => !sgIds.has(r.id))];
+      state.bpReadings.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
+      state.sugarReadings.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
+      saveLocal();
+      renderAll();
+      showToast('✅ Data imported successfully!');
+    } catch {
+      showToast('❌ Invalid file format');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 }
 function shareApp() {
   const url = window.location.href;
