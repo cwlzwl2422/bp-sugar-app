@@ -1500,7 +1500,13 @@ function importJsonData(e) {
       }
       state.bpReadings.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
       state.sugarReadings.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
-      save(); renderAll();
+      save();
+      refreshDashboard();
+      renderBPRecent();
+      renderSugarRecent();
+      renderHistory();
+      renderHomeCharts();
+      renderCharts();
       showToast(`✅ Imported ${imported} records!`);
     } catch(err) {
       showToast('❌ Invalid CSV file');
