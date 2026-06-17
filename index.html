@@ -1452,16 +1452,14 @@ async function installApp() {
 }
 function exportData() {
   const rows = [];
-  rows.push(['Type','Date','Time','Value1','Value2','Value3','Unit','MealContext','Notes']);
+  rows.push(['Type','Date','Time','Systolic','Diastolic','Pulse','GlucoseValue','Unit','MealContext','ReadingType','Notes']);
   state.bpReadings.forEach(r => {
-    const d = new Date(r.datetime);
-    rows.push(['BP', d.toLocaleDateString(), d.toLocaleTimeString(), r.systolic, r.diastolic, r.pulse||'', 'mmHg', '', r.notes||'']);
+    rows.push(['BP', r.date||'', r.time||'', r.systolic||'', r.diastolic||'', r.pulse||'', '', 'mmHg', '', r.readingType||'Manual', r.notes||'']);
   });
   state.sugarReadings.forEach(r => {
-    const d = new Date(r.datetime);
-    rows.push(['Sugar', d.toLocaleDateString(), d.toLocaleTimeString(), r.glucose, '', '', r.unit||'mmol/L', r.mealContext||'', r.notes||'']);
+    rows.push(['Sugar', r.date||'', r.time||'', '', '', '', r.value||'', r.unit||'mmol/L', r.mealContext||'', r.readingType||'Manual', r.notes||'']);
   });
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv = rows.map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1477,34 +1475,34 @@ function importJsonData(e) {
   const reader = new FileReader();
   reader.onload = function(ev) {
     try {
-      const lines = ev.target.result.split('\n').filter(l => l.trim());
+      const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) throw new Error('Empty file');
       let imported = 0;
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].match(/(".*?"|[^,]+)(?=,|$)/g) || [];
-        const clean = cols.map(c => c.replace(/^"|"$/g,'').replace(/""/g,'"'));
-        const [type, date, time, v1, v2, v3, unit, meal, notes] = clean;
-        const datetime = new Date(`${date} ${time}`).toISOString();
-        if (type === 'BP') {
+        const cols = [];
+        let cur = '', inQ = false;
+        for (const ch of lines[i]) {
+          if (ch === '"') { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { cols.push(cur); cur = ''; }
+          else cur += ch;
+        }
+        cols.push(cur);
+        const [type, date, time, sys, dia, pulse, glucose, unit, meal, rtype, notes] = cols.map(c => c.trim());
+        if (type === 'BP' && sys && dia) {
           const id = 'imp_' + Date.now() + '_' + i;
-          if (!state.bpReadings.find(r => r.systolic==v1 && r.diastolic==v2 && r.datetime===datetime)) {
-            state.bpReadings.push({ id, systolic: parseInt(v1), diastolic: parseInt(v2), pulse: parseInt(v3)||0, datetime, notes: notes||'' });
-            imported++;
-          }
-        } else if (type === 'Sugar') {
+          state.bpReadings.push({ id, date, time: time||'', systolic: parseInt(sys), diastolic: parseInt(dia), pulse: parseInt(pulse)||0, readingType: rtype||'Manual', notes: notes||'', source: 'Import', createdAt: new Date().toISOString() });
+          imported++;
+        } else if (type === 'Sugar' && glucose) {
           const id = 'imp_' + Date.now() + '_' + i;
-          if (!state.sugarReadings.find(r => r.glucose==v1 && r.datetime===datetime)) {
-            state.sugarReadings.push({ id, glucose: parseFloat(v1), unit: unit||'mmol/L', mealContext: meal||'', datetime, notes: notes||'' });
-            imported++;
-          }
+          state.sugarReadings.push({ id, date, time: time||'', value: parseFloat(glucose), unit: unit||'mmol/L', mealContext: meal||'', readingType: rtype||'Manual', notes: notes||'', source: 'Import', createdAt: new Date().toISOString() });
+          imported++;
         }
       }
-      state.bpReadings.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
-      state.sugarReadings.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
-      saveLocal();
-      renderAll();
+      state.bpReadings.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+      state.sugarReadings.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+      save(); renderAll();
       showToast(`✅ Imported ${imported} records!`);
-    } catch {
+    } catch(err) {
       showToast('❌ Invalid CSV file');
     }
     e.target.value = '';
