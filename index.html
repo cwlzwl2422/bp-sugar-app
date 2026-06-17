@@ -324,6 +324,7 @@
       <div class="dash-card-value" id="dash-bp-value">—</div>
       <div class="dash-card-unit" id="dash-bp-unit">mmHg</div>
       <div class="dash-card-sub" id="dash-bp-pulse"></div>
+      <div class="dash-card-sub" id="dash-bp-date" style="color:var(--text-light);font-size:11px"></div>
       <div style="margin-top:8px" id="dash-bp-badge"></div>
     </div>
     <div class="dash-card" onclick="showSection('history',document.querySelectorAll('.nav-btn')[3])">
@@ -331,6 +332,7 @@
       <div class="dash-card-value" id="dash-sugar-value" style="color:var(--accent)">—</div>
       <div class="dash-card-unit" id="dash-sugar-unit"></div>
       <div class="dash-card-sub" id="dash-sugar-type"></div>
+      <div class="dash-card-sub" id="dash-sugar-date" style="color:var(--text-light);font-size:11px"></div>
       <div style="margin-top:8px" id="dash-sugar-badge"></div>
     </div>
   </div>
@@ -947,6 +949,7 @@ function refreshDashboard() {
     document.getElementById('dash-bp-value').textContent = `${bp.systolic}/${bp.diastolic}`;
     document.getElementById('dash-bp-unit').textContent = 'mmHg';
     document.getElementById('dash-bp-pulse').textContent = bp.pulse ? `Pulse: ${bp.pulse} bpm` : '';
+    document.getElementById('dash-bp-date').textContent = `📅 ${bp.date}${bp.time ? ' ' + bp.time : ''}`;
     document.getElementById('dash-bp-badge').innerHTML = `<span class="badge ${st.cls}">${st.label}</span>`;
   }
   const sg = state.sugarReadings[0];
@@ -955,6 +958,7 @@ function refreshDashboard() {
     document.getElementById('dash-sugar-value').textContent = sg.value;
     document.getElementById('dash-sugar-unit').textContent = sg.unit;
     document.getElementById('dash-sugar-type').textContent = sg.readingType;
+    document.getElementById('dash-sugar-date').textContent = `📅 ${sg.date}${sg.time ? ' ' + sg.time : ''}`;
     document.getElementById('dash-sugar-badge').innerHTML = `<span class="badge ${st.cls}">${st.label}</span>`;
   }
   renderHomeCharts();
