@@ -1477,25 +1477,37 @@ function importJsonData(e) {
     try {
       const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) throw new Error('Empty file');
-      let imported = 0;
+      // Parse header to find column indexes
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g,''));
+      const idx = h => header.indexOf(h);
+      const iDate = idx('date'), iTime = idx('time');
+      const iSys = idx('systolic'), iDia = idx('diastolic'), iPulse = idx('pulse');
+      const iSugar = header.findIndex(h => h.includes('blood sugar') || h === 'glucose' || h === 'value');
+      const iUnit = idx('unit'), iRtype = idx('reading type') !== -1 ? idx('reading type') : idx('readingtype');
+      const iNotes = idx('notes');
+      let bpCount = 0, sgCount = 0;
       for (let i = 1; i < lines.length; i++) {
         const cols = [];
         let cur = '', inQ = false;
         for (const ch of lines[i]) {
           if (ch === '"') { inQ = !inQ; }
-          else if (ch === ',' && !inQ) { cols.push(cur); cur = ''; }
+          else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
           else cur += ch;
         }
-        cols.push(cur);
-        const [type, date, time, sys, dia, pulse, glucose, unit, meal, rtype, notes] = cols.map(c => c.trim());
-        if (type === 'BP' && sys && dia) {
-          const id = 'imp_' + Date.now() + '_' + i;
-          state.bpReadings.push({ id, date, time: time||'', systolic: parseInt(sys), diastolic: parseInt(dia), pulse: parseInt(pulse)||0, readingType: rtype||'Manual', notes: notes||'', source: 'Import', createdAt: new Date().toISOString() });
-          imported++;
-        } else if (type === 'Sugar' && glucose) {
-          const id = 'imp_' + Date.now() + '_' + i;
-          state.sugarReadings.push({ id, date, time: time||'', value: parseFloat(glucose), unit: unit||'mmol/L', mealContext: meal||'', readingType: rtype||'Manual', notes: notes||'', source: 'Import', createdAt: new Date().toISOString() });
-          imported++;
+        cols.push(cur.trim());
+        const get = ix => (ix >= 0 && ix < cols.length) ? cols[ix] : '';
+        const date = get(iDate), time = get(iTime);
+        const sys = get(iSys), dia = get(iDia), pulse = get(iPulse);
+        const sugar = get(iSugar), unit = get(iUnit) || 'mmol/L';
+        const rtype = get(iRtype) || 'Manual', notes = get(iNotes) || '';
+        if (!date) continue;
+        if (sys && dia && parseInt(sys) > 0) {
+          state.bpReadings.push({ id: 'imp_bp_' + i + '_' + Date.now(), date, time, systolic: parseInt(sys), diastolic: parseInt(dia), pulse: parseInt(pulse)||0, readingType: 'Manual', notes, source: 'Import', createdAt: new Date().toISOString() });
+          bpCount++;
+        }
+        if (sugar && parseFloat(sugar) > 0 && unit.toLowerCase().includes('mol')) {
+          state.sugarReadings.push({ id: 'imp_sg_' + i + '_' + Date.now(), date, time, value: parseFloat(sugar), unit, mealContext: '', readingType: 'Manual', notes, source: 'Import', createdAt: new Date().toISOString() });
+          sgCount++;
         }
       }
       state.bpReadings.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
@@ -1507,9 +1519,10 @@ function importJsonData(e) {
       renderHistory();
       renderHomeCharts();
       renderCharts();
-      showToast(`✅ Imported ${imported} records!`);
+      showToast(`✅ Imported ${bpCount} BP + ${sgCount} Sugar records!`);
     } catch(err) {
-      showToast('❌ Invalid CSV file');
+      console.error('Import error:', err);
+      showToast('❌ Import error: ' + err.message);
     }
     e.target.value = '';
   };
