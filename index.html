@@ -1482,8 +1482,8 @@ function importJsonData(e) {
       const idx = h => header.indexOf(h);
       const iDate = idx('date'), iTime = idx('time');
       const iSys = idx('systolic'), iDia = idx('diastolic'), iPulse = idx('pulse');
-      const iSugar = header.findIndex(h => h.includes('blood sugar') || h === 'glucose' || h === 'value');
-      const iUnit = idx('unit'), iRtype = idx('reading type') !== -1 ? idx('reading type') : idx('readingtype');
+      const iSugar = header.findIndex(h => h.includes('sugar') || h.includes('glucose') || h === 'value');
+      const iUnit = idx('unit'), iRtype = header.findIndex(h => h.includes('reading'));
       const iNotes = idx('notes');
       let bpCount = 0, sgCount = 0;
       for (let i = 1; i < lines.length; i++) {
@@ -1501,12 +1501,20 @@ function importJsonData(e) {
         const sugar = get(iSugar), unit = get(iUnit) || 'mmol/L';
         const rtype = get(iRtype) || 'Manual', notes = get(iNotes) || '';
         if (!date) continue;
-        if (sys && dia && parseInt(sys) > 0) {
-          state.bpReadings.push({ id: 'imp_bp_' + i + '_' + Date.now(), date, time, systolic: parseInt(sys), diastolic: parseInt(dia), pulse: parseInt(pulse)||0, readingType: 'Manual', notes, source: 'Import', createdAt: new Date().toISOString() });
+        // Convert DD/MM/YYYY to YYYY-MM-DD for proper sorting
+        let sortDate = date;
+        const dParts = date.split('/');
+        if (dParts.length === 3 && dParts[2].length === 4) {
+          sortDate = `${dParts[2]}-${dParts[1].padStart(2,'0')}-${dParts[0].padStart(2,'0')}`;
+        }
+        const sysVal = parseInt(sys), diaVal = parseInt(dia);
+        if (sys && dia && !isNaN(sysVal) && sysVal > 0 && !isNaN(diaVal) && diaVal > 0) {
+          state.bpReadings.push({ id: 'imp_bp_' + i + '_' + Date.now(), date: sortDate, time, systolic: sysVal, diastolic: diaVal, pulse: parseInt(pulse)||0, readingType: 'Manual', notes, source: 'Import', createdAt: new Date().toISOString() });
           bpCount++;
         }
-        if (sugar && parseFloat(sugar) > 0 && unit.toLowerCase().includes('mol')) {
-          state.sugarReadings.push({ id: 'imp_sg_' + i + '_' + Date.now(), date, time, value: parseFloat(sugar), unit, mealContext: '', readingType: 'Manual', notes, source: 'Import', createdAt: new Date().toISOString() });
+        const sugarVal = parseFloat(sugar);
+        if (sugar && !isNaN(sugarVal) && sugarVal > 0) {
+          state.sugarReadings.push({ id: 'imp_sg_' + i + '_' + Date.now(), date: sortDate, time, value: sugarVal, unit: unit||'mmol/L', mealContext: '', readingType: 'Manual', notes, source: 'Import', createdAt: new Date().toISOString() });
           sgCount++;
         }
       }
