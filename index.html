@@ -665,16 +665,16 @@
     <div class="settings-row" onclick="exportData()">
       <div class="settings-icon" style="background:#E8F5E9">📤</div>
       <div class="settings-label">Export Data</div>
-      <div class="settings-value">JSON</div>
+      <div class="settings-value">CSV</div>
       <div class="settings-arrow">›</div>
     </div>
     <div class="settings-row" onclick="document.getElementById('import-file').click()">
       <div class="settings-icon" style="background:#E3F2FD">📥</div>
       <div class="settings-label">Import Data</div>
-      <div class="settings-value">JSON</div>
+      <div class="settings-value">CSV</div>
       <div class="settings-arrow">›</div>
     </div>
-    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJsonData(event)">
+    <input type="file" id="import-file" accept=".csv" style="display:none" onchange="importJsonData(event)">
     <div class="settings-row" onclick="confirmDeleteAll()">
       <div class="settings-icon" style="background:#FFEBEE">🗑️</div>
       <div class="settings-label" style="color:var(--danger)">Delete All Data</div>
@@ -1451,19 +1451,25 @@ async function installApp() {
   if (row) row.style.display = 'none';
 }
 function exportData() {
-  const data = {
-    exported: new Date().toISOString(),
-    bpReadings: state.bpReadings,
-    sugarReadings: state.sugarReadings
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const rows = [];
+  rows.push(['Type','Date','Time','Value1','Value2','Value3','Unit','MealContext','Notes']);
+  state.bpReadings.forEach(r => {
+    const d = new Date(r.datetime);
+    rows.push(['BP', d.toLocaleDateString(), d.toLocaleTimeString(), r.systolic, r.diastolic, r.pulse||'', 'mmHg', '', r.notes||'']);
+  });
+  state.sugarReadings.forEach(r => {
+    const d = new Date(r.datetime);
+    rows.push(['Sugar', d.toLocaleDateString(), d.toLocaleTimeString(), r.glucose, '', '', r.unit||'mmol/L', r.mealContext||'', r.notes||'']);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `bpsugar-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `bpsugar-backup-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('✅ Data exported!');
+  showToast('✅ Data exported as CSV!');
 }
 function importJsonData(e) {
   const file = e.target.files[0];
@@ -1471,20 +1477,35 @@ function importJsonData(e) {
   const reader = new FileReader();
   reader.onload = function(ev) {
     try {
-      const data = JSON.parse(ev.target.result);
-      if (!data.bpReadings && !data.sugarReadings) throw new Error('Invalid format');
-      const existing = state;
-      const bpIds = new Set(existing.bpReadings.map(r => r.id));
-      const sgIds = new Set(existing.sugarReadings.map(r => r.id));
-      if (data.bpReadings) state.bpReadings = [...existing.bpReadings, ...data.bpReadings.filter(r => !bpIds.has(r.id))];
-      if (data.sugarReadings) state.sugarReadings = [...existing.sugarReadings, ...data.sugarReadings.filter(r => !sgIds.has(r.id))];
+      const lines = ev.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) throw new Error('Empty file');
+      let imported = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].match(/(".*?"|[^,]+)(?=,|$)/g) || [];
+        const clean = cols.map(c => c.replace(/^"|"$/g,'').replace(/""/g,'"'));
+        const [type, date, time, v1, v2, v3, unit, meal, notes] = clean;
+        const datetime = new Date(`${date} ${time}`).toISOString();
+        if (type === 'BP') {
+          const id = 'imp_' + Date.now() + '_' + i;
+          if (!state.bpReadings.find(r => r.systolic==v1 && r.diastolic==v2 && r.datetime===datetime)) {
+            state.bpReadings.push({ id, systolic: parseInt(v1), diastolic: parseInt(v2), pulse: parseInt(v3)||0, datetime, notes: notes||'' });
+            imported++;
+          }
+        } else if (type === 'Sugar') {
+          const id = 'imp_' + Date.now() + '_' + i;
+          if (!state.sugarReadings.find(r => r.glucose==v1 && r.datetime===datetime)) {
+            state.sugarReadings.push({ id, glucose: parseFloat(v1), unit: unit||'mmol/L', mealContext: meal||'', datetime, notes: notes||'' });
+            imported++;
+          }
+        }
+      }
       state.bpReadings.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
       state.sugarReadings.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
       saveLocal();
       renderAll();
-      showToast('✅ Data imported successfully!');
+      showToast(`✅ Imported ${imported} records!`);
     } catch {
-      showToast('❌ Invalid file format');
+      showToast('❌ Invalid CSV file');
     }
     e.target.value = '';
   };
