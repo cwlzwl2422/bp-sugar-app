@@ -674,7 +674,7 @@
       <div class="settings-value">JSON</div>
       <div class="settings-arrow">›</div>
     </div>
-    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJsonData(event)">
     <div class="settings-row" onclick="confirmDeleteAll()">
       <div class="settings-icon" style="background:#FFEBEE">🗑️</div>
       <div class="settings-label" style="color:var(--danger)">Delete All Data</div>
@@ -1465,7 +1465,7 @@ function exportData() {
   URL.revokeObjectURL(url);
   showToast('✅ Data exported!');
 }
-function importData(e) {
+function importJsonData(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
